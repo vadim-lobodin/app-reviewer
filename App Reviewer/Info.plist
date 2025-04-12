@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>App Reviewer needs microphone access to record your voice commentary during app reviews.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>App Reviewer may need camera access for certain recording modes.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>App Reviewer needs screen recording permissions to capture your screen during app reviews.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>App Reviewer uses speech recognition to transcribe your commentary into text.</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>md</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>Markdown Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>html</string>
+            </array>
+            <key>CFBundleTypeName</key>
+            <string>HTML Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+        </dict>
+    </array>
+</dict>
+</plist>
