@@ -29,10 +29,6 @@ class RecordingManager: ObservableObject {
     
     @Published var recordingState: RecordingState = .idle
     @Published var isAudioEnabled: Bool = true
-    @Published var selectedDisplay: SCDisplay?
-    @Published var selectedWindow: SCWindow?
-    @Published var availableDisplays: [SCDisplay] = []
-    @Published var availableWindows: [SCWindow] = []
     @Published var elapsedSeconds: Int = 0
     @Published var previewImage: CGImage?
     
@@ -45,27 +41,29 @@ class RecordingManager: ObservableObject {
     private var videoURL: URL?
     private var audioURL: URL?
     
+    // Main display for recording (we'll always use this)
+    private var mainDisplay: SCDisplay?
+    
     // Callbacks
     var onSessionComplete: ((URL?, URL?) -> Void)?
     
     init() {
-        // Initialize with available capture devices
+        // Get the main display on initialization
         Task {
-            await refreshAvailableCaptureDevices()
+            await refreshMainDisplay()
         }
     }
     
-    func refreshAvailableCaptureDevices() async {
+    func refreshMainDisplay() async {
         do {
             let content = try await SCShareableContent.current
             
             await MainActor.run {
-                self.availableDisplays = content.displays
-                self.availableWindows = content.windows.filter { $0.owningApplication != nil && $0.owningApplication?.applicationName != "App Reviewer" }
+                // Store the main display (usually the first one)
+                self.mainDisplay = content.displays.first
                 
-                // Default to main display if none selected
-                if selectedDisplay == nil && !availableDisplays.isEmpty {
-                    selectedDisplay = availableDisplays.first
+                if self.mainDisplay == nil {
+                    print("Warning: No display found for recording")
                 }
             }
         } catch {
@@ -77,6 +75,14 @@ class RecordingManager: ObservableObject {
         // Make a local copy of the state to avoid Swift 6 concurrency issues
         let currentState = await MainActor.run { self.recordingState }
         guard currentState == .idle || currentState == .paused else { return }
+        
+        // Ensure we have a display to record
+        guard let mainDisplay = await MainActor.run({ self.mainDisplay }) else {
+            await MainActor.run {
+                recordingState = .error("No display available for recording")
+            }
+            return
+        }
         
         await MainActor.run {
             recordingState = .preparing
@@ -95,13 +101,8 @@ class RecordingManager: ObservableObject {
             audioURL = localAudioURL
         }
         
-        // Make sure we have a filter to capture
-        guard let filter = await createCaptureFilter() else {
-            await MainActor.run {
-                recordingState = .error("No valid capture selection")
-            }
-            return
-        }
+        // Create a content filter for the main display
+        let filter = SCContentFilter(display: mainDisplay, excludingWindows: [])
         
         do {
             // Initialize screen recorder
@@ -122,7 +123,6 @@ class RecordingManager: ObservableObject {
             }
             
             // Start audio recording if enabled
-            // Fixed: Correctly use MainActor.run and handle optional audioURL
             let isEnabled = await MainActor.run { self.isAudioEnabled }
             if isEnabled {
                 let audioRecorder = try AudioRecorder(outputURL: localAudioURL)
@@ -208,19 +208,6 @@ class RecordingManager: ObservableObject {
         }
     }
     
-    private func createCaptureFilter() async -> SCContentFilter? {
-        // Get local copies to avoid capturing self
-        let localSelectedDisplay = await MainActor.run { self.selectedDisplay }
-        let localSelectedWindow = await MainActor.run { self.selectedWindow }
-        
-        if let display = localSelectedDisplay {
-            return SCContentFilter(display: display, excludingWindows: [])
-        } else if let window = localSelectedWindow {
-            return SCContentFilter(desktopIndependentWindow: window)
-        }
-        return nil
-    }
-    
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self = self else { return }
@@ -245,6 +232,7 @@ class ScreenRecorder: NSObject {
     private var firstFrameTime: CMTime?
     private var onFrameUpdate: ((CGImage) -> Void)?
     private var hasStartedWriting = false // Track if writing has started
+    private var frameCount = 0 // Track number of frames written
     
     init(destination: URL, filter: SCContentFilter, onFrameUpdate: ((CGImage) -> Void)? = nil) {
         self.destination = destination
@@ -266,6 +254,9 @@ class ScreenRecorder: NSObject {
     }
     
     func start() async throws {
+        // Try to delete existing file if it exists to ensure we can create a new one
+        try? FileManager.default.removeItem(at: destination)
+        
         // Create video writer
         videoWriter = try AVAssetWriter(url: destination, fileType: .mp4)
         
@@ -293,6 +284,8 @@ class ScreenRecorder: NSObject {
         
         try stream?.addStreamOutput(self, type: .screen, sampleHandlerQueue: DispatchQueue.global(qos: .userInitiated))
         try await stream?.startCapture()
+        
+        print("Screen recording started")
     }
     
     func pause() {
@@ -304,6 +297,8 @@ class ScreenRecorder: NSObject {
     }
     
     func stop() async throws {
+        print("Stopping screen recording. Frames captured: \(frameCount)")
+        
         // Stop the capture stream first
         if let stream = stream {
             try await stream.stopCapture()
@@ -314,13 +309,21 @@ class ScreenRecorder: NSObject {
         if hasStartedWriting, let videoWriterInput = videoWriterInput, let videoWriter = videoWriter {
             // Check the status before calling markAsFinished
             if videoWriter.status == .writing {
+                print("Finalizing video: marking as finished")
                 videoWriterInput.markAsFinished()
                 await videoWriter.finishWriting()
+                print("Video writing finished successfully")
             } else {
                 print("Skipping markAsFinished since writer status is \(videoWriter.status.rawValue)")
             }
         } else {
-            print("No video data was written, skipping finalization")
+            print("No video data was written, skipping finalization (hasStartedWriting: \(hasStartedWriting))")
+            
+            // Create an empty file to prevent errors in case no frames were captured
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                FileManager.default.createFile(atPath: destination.path, contents: Data())
+                print("Created empty file at \(destination.path)")
+            }
         }
     }
 }
@@ -340,6 +343,7 @@ extension ScreenRecorder: SCStreamOutput {
         
         // Initialize writer if needed
         if videoWriter?.status == .unknown {
+            print("Initializing video writer with first frame")
             firstFrameTime = frameTime
             videoWriter?.startWriting()
             videoWriter?.startSession(atSourceTime: frameTime)
@@ -347,8 +351,15 @@ extension ScreenRecorder: SCStreamOutput {
         }
         
         // Only append if we've started writing
-        if hasStartedWriting {
-            videoWriterInput.append(sampleBuffer)
+        if hasStartedWriting && videoWriter?.status == .writing {
+            if videoWriterInput.append(sampleBuffer) {
+                frameCount += 1
+                if frameCount % 30 == 0 {
+                    print("Frames written: \(frameCount)")
+                }
+            } else {
+                print("Failed to append sample buffer")
+            }
         }
         
         // Update the preview image

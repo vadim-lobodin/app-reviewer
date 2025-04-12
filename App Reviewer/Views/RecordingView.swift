@@ -17,7 +17,7 @@ struct RecordingView: View {
         .padding()
         .onAppear {
             Task {
-                await recordingManager.refreshAvailableCaptureDevices()
+                await recordingManager.refreshMainDisplay()
             }
             
             // Configure callback for when recording session completes
@@ -52,31 +52,12 @@ struct RecordingView: View {
                 .fontWeight(.bold)
             
             VStack(alignment: .leading, spacing: 15) {
-                Text("Select what to record:")
+                Text("Ready to capture your screen")
                     .font(.headline)
                 
-                Picker("Capture Type", selection: $recordingManager.selectedDisplay) {
-                    Text("Select display...").tag(nil as SCDisplay?)
-                    
-                    ForEach(recordingManager.availableDisplays, id: \.displayID) { display in
-                        Text("Display: \(display.width) × \(display.height)")
-                            .tag(Optional(display))
-                    }
-                }
-                .frame(width: 400)
-                
-                Picker("Window", selection: $recordingManager.selectedWindow) {
-                    Text("Select window...").tag(nil as SCWindow?)
-                    
-                    ForEach(recordingManager.availableWindows, id: \.windowID) { window in
-                        if let appName = window.owningApplication?.applicationName {
-                            // Fix: Use nil-coalescing operator for optional title
-                            Text("Window: \(appName) - \(window.title ?? "Untitled")")
-                                .tag(Optional(window))
-                        }
-                    }
-                }
-                .frame(width: 400)
+                Text("The entire screen will be recorded.")
+                    .foregroundColor(.secondary)
+                    .padding(.bottom)
                 
                 Toggle("Record audio commentary", isOn: $recordingManager.isAudioEnabled)
                     .padding(.top, 10)
@@ -86,8 +67,12 @@ struct RecordingView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.windowBackgroundColor))
             )
+            .frame(width: 400)
             
             Button {
+                // Create a new session before starting recording
+                sessionManager.createNewSession()
+                
                 Task { await recordingManager.startRecording() }
             } label: {
                 Text("Start Recording")
@@ -98,7 +83,6 @@ struct RecordingView: View {
                     .background(Color.blue)
                     .cornerRadius(10)
             }
-            .disabled(recordingManager.selectedDisplay == nil && recordingManager.selectedWindow == nil)
         }
     }
     
