@@ -1,59 +1,119 @@
-//
-//  ContentView.swift
-//  App Reviewer
-//
-//  Created by Vadim.Lobodin on 12.04.25.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
+    @EnvironmentObject private var sessionManager: SessionManager
+    @State private var selectedTab: Tab = .record
+    
+    enum Tab {
+        case record, review, export
+    }
+    
     var body: some View {
         NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .toolbar {
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
+            Sidebar(selectedTab: $selectedTab)
         } detail: {
-            Text("Select an item")
+            tabContent
+                .frame(minWidth: 600, minHeight: 400)
         }
     }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+    
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .record:
+            RecordingView()
+        case .review:
+            if let currentSession = sessionManager.currentSession {
+                ReviewView(session: currentSession)
+            } else {
+                EmptyStateView(message: "No recording session to review")
+            }
+        case .export:
+            if let currentSession = sessionManager.currentSession {
+                ExportView(session: currentSession)
+            } else {
+                EmptyStateView(message: "No recording session to export")
             }
         }
     }
 }
 
+struct Sidebar: View {
+    @Binding var selectedTab: ContentView.Tab
+    @EnvironmentObject private var sessionManager: SessionManager
+    
+    var body: some View {
+        List {
+            NavigationLink(destination: EmptyView()) {
+                Label("Record", systemImage: "record.circle")
+            }
+            .onTapGesture {
+                selectedTab = .record
+            }
+            .background(selectedTab == .record ? Color.accentColor.opacity(0.2) : Color.clear)
+            
+            NavigationLink(destination: EmptyView()) {
+                Label("Review", systemImage: "list.bullet.rectangle")
+            }
+            .onTapGesture {
+                selectedTab = .review
+            }
+            .background(selectedTab == .review ? Color.accentColor.opacity(0.2) : Color.clear)
+            
+            NavigationLink(destination: EmptyView()) {
+                Label("Export", systemImage: "square.and.arrow.up")
+            }
+            .onTapGesture {
+                selectedTab = .export
+            }
+            .background(selectedTab == .export ? Color.accentColor.opacity(0.2) : Color.clear)
+            
+            Section("Sessions") {
+                ForEach(sessionManager.sessions) { session in
+                    NavigationLink(destination: EmptyView()) {
+                        HStack {
+                            Text(session.name)
+                            Spacer()
+                            Text(session.formattedDate)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .onTapGesture {
+                        sessionManager.setCurrentSession(session)
+                        selectedTab = .review
+                    }
+                }
+            }
+        }
+        .listStyle(SidebarListStyle())
+        .frame(minWidth: 200)
+    }
+}
+
+struct EmptyStateView: View {
+    let message: String
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "questionmark.square.dashed")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            Text(message)
+                .font(.headline)
+            
+            Button("Start New Recording") {
+                // Create a new recording session
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.windowBackgroundColor))
+    }
+}
+
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .environmentObject(SessionManager())
 }
