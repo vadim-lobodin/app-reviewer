@@ -35,10 +35,19 @@ struct RecordingSession: Identifiable, Codable {
 }
 
 struct Screenshot: Identifiable, Codable {
-    let id: UUID = UUID()
+    // Changed to vars to allow Codable to decode them
+    var id: UUID
     let timestamp: TimeInterval
     let imageURL: URL
     let thumbnailURL: URL?
+    
+    // Initialize with default value
+    init(id: UUID = UUID(), timestamp: TimeInterval, imageURL: URL, thumbnailURL: URL?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.imageURL = imageURL
+        self.thumbnailURL = thumbnailURL
+    }
     
     var formattedTimestamp: String {
         let minutes = Int(timestamp) / 60
@@ -48,11 +57,21 @@ struct Screenshot: Identifiable, Codable {
 }
 
 struct Transcription: Identifiable, Codable {
-    let id: UUID = UUID()
+    // Changed to vars to allow Codable to decode them
+    var id: UUID
     let startTime: TimeInterval
     let endTime: TimeInterval
     let text: String
     var summary: String?
+    
+    // Initialize with default value
+    init(id: UUID = UUID(), startTime: TimeInterval, endTime: TimeInterval, text: String, summary: String? = nil) {
+        self.id = id
+        self.startTime = startTime
+        self.endTime = endTime
+        self.text = text
+        self.summary = summary
+    }
     
     var formattedTimeRange: String {
         let startMinutes = Int(startTime) / 60

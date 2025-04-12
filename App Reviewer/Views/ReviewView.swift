@@ -100,23 +100,18 @@ struct ReviewView: View {
         player.seek(to: seconds)
         player.play()
         
-        // Show in player window
-        let playerViewController = AVPlayerViewController()
-        playerViewController.player = player
-        
-        if let windowScene = NSApplication.shared.windows.first?.windowScene {
-            let hostingController = NSHostingController(rootView: PlayerView(player: player))
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
-                styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.contentView = hostingController.view
-            window.title = "Video Playback"
-            window.center()
-            window.makeKeyAndOrderFront(nil)
-        }
+        // Show in player window (macOS specific approach)
+        let hostingController = NSHostingController(rootView: PlayerView(player: player))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingController.view
+        window.title = "Video Playback"
+        window.center()
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -214,7 +209,7 @@ struct EmptyReviewView: View {
             Text("No review data available")
                 .font(.title2)
             
-            if session.videoURL != nil && session.audioURL != nil {
+            if let videoURL = session.videoURL, let audioURL = session.audioURL {
                 Button("Generate Analysis") {
                     isAnalyzing = true
                 }
