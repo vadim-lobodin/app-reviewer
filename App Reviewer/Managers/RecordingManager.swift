@@ -371,12 +371,11 @@ extension ScreenRecorder: SCStreamOutput {
         
         if let formatDescription = formatDescription,
            let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Fixed: Add sampleTiming parameter and use correct function signature
+            // Removed the sampleTiming parameter - it's not part of this function
             _ = CMSampleBufferCreateReadyWithImageBuffer(
                 allocator: kCFAllocatorDefault, 
                 imageBuffer: imageBuffer,
                 formatDescription: formatDescription,
-                sampleTiming: &timing,
                 sampleBufferOut: &adjustedBuffer
             )
         }
