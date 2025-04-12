@@ -331,9 +331,16 @@ extension ScreenRecorder: SCStreamOutput {
             videoWriter?.startSession(atSourceTime: frameTime)
         }
         
-        // Write the frame
-        if let adjustedBuffer = adjustTime(sampleBuffer, from: firstFrameTime) {
-            videoWriterInput.append(adjustedBuffer)
+        // Simplify the timing adjustment approach
+        // Instead of trying to create a new buffer with adjusted timing,
+        // just check if we should append the buffer based on the time
+        if let startTime = firstFrameTime {
+            // Only append frames after the start time
+            if CMTIME_COMPARE_INLINE(frameTime, >=, startTime) {
+                videoWriterInput.append(sampleBuffer)
+            }
+        } else {
+            videoWriterInput.append(sampleBuffer)
         }
         
         // Update the preview image
@@ -345,43 +352,6 @@ extension ScreenRecorder: SCStreamOutput {
                 onFrameUpdate(cgImage)
             }
         }
-    }
-    
-    private func adjustTime(_ sampleBuffer: CMSampleBuffer, from startTime: CMTime?) -> CMSampleBuffer? {
-        guard let startTime = startTime else { return sampleBuffer }
-        
-        var adjustedBuffer: CMSampleBuffer?
-        var timing = CMSampleTimingInfo()
-        var count: CMItemCount = 0
-        
-        // Get the timing info from the buffer - Fixed API usage with proper argument labels
-        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 
-                                                    entryCount: 1, 
-                                                    arrayToFill: &timing, 
-                                                    entriesNeededOut: &count) == noErr else {
-            return nil
-        }
-        
-        // Adjust time to be relative to the first frame
-        timing.presentationTimeStamp = CMTimeSubtract(timing.presentationTimeStamp, startTime)
-        
-        // Create a new buffer with the adjusted timing
-        var formatDescription: CMFormatDescription?
-        CMSampleBufferGetFormatDescription(sampleBuffer, &formatDescription)
-        
-        if let formatDescription = formatDescription,
-           let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Using unlabeled parameters as per the Core Media API
-            _ = CMSampleBufferCreateReadyWithImageBuffer(
-                kCFAllocatorDefault, 
-                imageBuffer,
-                formatDescription,
-                &timing,  // This is the sampleTiming parameter that was missing
-                &adjustedBuffer
-            )
-        }
-        
-        return adjustedBuffer
     }
 }
 
