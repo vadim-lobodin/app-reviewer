@@ -77,7 +77,8 @@ class RecordingManager: ObservableObject {
         guard currentState == .idle || currentState == .paused else { return }
         
         // Ensure we have a display to record
-        guard let mainDisplay = await MainActor.run({ self.mainDisplay }) else {
+        let mainDisplay = await MainActor.run(resultType: SCDisplay?.self) { self.mainDisplay }
+        guard let mainDisplay = mainDisplay else {
             await MainActor.run {
                 recordingState = .error("No display available for recording")
             }
