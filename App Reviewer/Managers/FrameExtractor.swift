@@ -33,7 +33,8 @@ class FrameExtractor {
             
             do {
                 let imageRef = try await generator.image(at: cmTime)
-                let frame = CIImage(cgImage: imageRef.image)
+                // Remove unused variable - using underscore instead
+                _ = CIImage(cgImage: imageRef.image)
                 
                 // Save full resolution image
                 let imageURL = outputDirectory.appendingPathComponent("frame_\(Int(time)).png")

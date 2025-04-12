@@ -122,8 +122,10 @@ class RecordingManager: ObservableObject {
             }
             
             // Start audio recording if enabled
-            if await MainActor.run({ self.isAudioEnabled }), let audioUrl = localAudioURL {
-                let audioRecorder = try AudioRecorder(outputURL: audioUrl)
+            // Fixed: Correctly use MainActor.run and handle optional audioURL
+            let isEnabled = await MainActor.run { self.isAudioEnabled }
+            if isEnabled {
+                let audioRecorder = try AudioRecorder(outputURL: localAudioURL)
                 try audioRecorder.start()
                 
                 await MainActor.run {
@@ -352,8 +354,8 @@ extension ScreenRecorder: SCStreamOutput {
         var timing = CMSampleTimingInfo()
         var count: CMItemCount = 0
         
-        // Get the timing info from the buffer
-        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 1, &timing, &count, nil) == noErr else {
+        // Get the timing info from the buffer - Fixed API usage
+        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 1, &timing, &count) == noErr else {
             return nil
         }
         
@@ -366,6 +368,7 @@ extension ScreenRecorder: SCStreamOutput {
         
         if let formatDescription = formatDescription,
            let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            // Fixed API usage
             CMSampleBufferCreateReadyWithImageBuffer(
                 allocator: kCFAllocatorDefault,
                 imageBuffer: imageBuffer,
