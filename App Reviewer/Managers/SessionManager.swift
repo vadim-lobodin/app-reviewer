@@ -118,7 +118,8 @@ class SessionManager: ObservableObject {
         }
     }
     
-    private func sessionDirectoryURL(for session: RecordingSession) -> URL {
+    // Changed from private to internal so AnalysisEngine can access it
+    func sessionDirectoryURL(for session: RecordingSession) -> URL {
         return sessionsDirectoryURL.appendingPathComponent(session.id.uuidString, isDirectory: true)
     }
 }
