@@ -15,12 +15,19 @@ class SessionManager: ObservableObject {
         if let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: "com.yourcompany.AppReviewer") {
             sessionsDirectoryURL = containerURL.appendingPathComponent("Sessions", isDirectory: true)
         } else {
-            let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-            sessionsDirectoryURL = documentsURL.appendingPathComponent("Sessions", isDirectory: true)
+            // Use the application support directory instead of documents
+            let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            sessionsDirectoryURL = appSupportURL.appendingPathComponent("Sessions", isDirectory: true)
         }
         
+        // Create the Sessions directory if it doesn't exist (fixed)
         if !fileManager.fileExists(atPath: sessionsDirectoryURL.path) {
-            try? fileManager.createDirectory(at: sessionsDirectoryURL, withIntermediateDirectories: true)
+            do {
+                try fileManager.createDirectory(at: sessionsDirectoryURL, withIntermediateDirectories: true)
+                print("Created sessions directory at: \(sessionsDirectoryURL.path)")
+            } catch {
+                print("Failed to create sessions directory: \(error)")
+            }
         }
         
         // Load existing sessions
@@ -71,6 +78,12 @@ class SessionManager: ObservableObject {
         let fileManager = FileManager.default
         
         do {
+            // Check if the sessions directory exists before trying to enumerate it
+            if !fileManager.fileExists(atPath: sessionsDirectoryURL.path) {
+                print("Sessions directory doesn't exist yet, no sessions to load")
+                return
+            }
+            
             let sessionDirs = try fileManager.contentsOfDirectory(at: sessionsDirectoryURL, includingPropertiesForKeys: nil)
             
             let loadedSessions = sessionDirs.compactMap { dirURL -> RecordingSession? in

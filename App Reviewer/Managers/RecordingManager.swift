@@ -203,6 +203,7 @@ class RecordingManager: ObservableObject {
         } catch {
             await MainActor.run {
                 recordingState = .error("Failed to stop recording: \(error.localizedDescription)")
+                print("Recording error: \(error)")
             }
         }
     }
@@ -243,6 +244,7 @@ class ScreenRecorder: NSObject {
     private var videoWriterInput: AVAssetWriterInput?
     private var firstFrameTime: CMTime?
     private var onFrameUpdate: ((CGImage) -> Void)?
+    private var hasStartedWriting = false // Track if writing has started
     
     init(destination: URL, filter: SCContentFilter, onFrameUpdate: ((CGImage) -> Void)? = nil) {
         self.destination = destination
@@ -302,12 +304,24 @@ class ScreenRecorder: NSObject {
     }
     
     func stop() async throws {
-        try await stream?.stopCapture()
-        stream = nil
+        // Stop the capture stream first
+        if let stream = stream {
+            try await stream.stopCapture()
+            self.stream = nil
+        }
         
-        // Finalize video writing
-        videoWriterInput?.markAsFinished()
-        await videoWriter?.finishWriting()
+        // Only finalize video writing if we actually started writing
+        if hasStartedWriting, let videoWriterInput = videoWriterInput, let videoWriter = videoWriter {
+            // Check the status before calling markAsFinished
+            if videoWriter.status == .writing {
+                videoWriterInput.markAsFinished()
+                await videoWriter.finishWriting()
+            } else {
+                print("Skipping markAsFinished since writer status is \(videoWriter.status.rawValue)")
+            }
+        } else {
+            print("No video data was written, skipping finalization")
+        }
     }
 }
 
@@ -329,10 +343,13 @@ extension ScreenRecorder: SCStreamOutput {
             firstFrameTime = frameTime
             videoWriter?.startWriting()
             videoWriter?.startSession(atSourceTime: frameTime)
+            hasStartedWriting = true
         }
         
-        // Simply append the original sample buffer - no need for adjustTime function
-        videoWriterInput.append(sampleBuffer)
+        // Only append if we've started writing
+        if hasStartedWriting {
+            videoWriterInput.append(sampleBuffer)
+        }
         
         // Update the preview image
         if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
