@@ -193,7 +193,8 @@ class RecordingManager: ObservableObject {
 }
 
 // Screen Capture implementation
-class ScreenRecorder {
+// Changed to inherit from NSObject instead of conforming to NSObjectProtocol
+class ScreenRecorder: NSObject {
     private let destination: URL
     private let filter: SCContentFilter
     private let configuration: SCStreamConfiguration
@@ -217,6 +218,9 @@ class ScreenRecorder {
         config.pixelFormat = kCVPixelFormatType_32BGRA
         
         self.configuration = config
+        
+        // Call super.init() since we inherit from NSObject
+        super.init()
     }
     
     func start() async throws {
