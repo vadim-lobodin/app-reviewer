@@ -136,7 +136,8 @@ struct ScreenshotDetailView: View {
                 }
                 .padding(.horizontal)
                 
-                if let imageURL = screenshot.imageURL, let image = NSImage(contentsOf: imageURL) {
+                // Fixed: Don't use optional binding for non-optional imageURL
+                if let image = NSImage(contentsOf: screenshot.imageURL) {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -209,8 +210,7 @@ struct EmptyReviewView: View {
             Text("No review data available")
                 .font(.title2)
             
-            // Fix: Check if videoURL and audioURL exist without using optional binding
-            // Since one of them might not be an optional type
+            // This check is correct since videoURL and audioURL are optional
             if session.videoURL != nil && session.audioURL != nil {
                 Button("Generate Analysis") {
                     isAnalyzing = true
