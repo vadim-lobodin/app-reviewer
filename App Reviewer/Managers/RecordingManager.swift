@@ -331,10 +331,8 @@ extension ScreenRecorder: SCStreamOutput {
             videoWriter?.startSession(atSourceTime: frameTime)
         }
         
-        // Write the frame
-        if let adjustedBuffer = adjustTime(sampleBuffer, from: firstFrameTime) {
-            videoWriterInput.append(adjustedBuffer)
-        }
+        // Simply append the original sample buffer - no need for adjustTime function
+        videoWriterInput.append(sampleBuffer)
         
         // Update the preview image
         if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
@@ -345,43 +343,6 @@ extension ScreenRecorder: SCStreamOutput {
                 onFrameUpdate(cgImage)
             }
         }
-    }
-    
-    private func adjustTime(_ sampleBuffer: CMSampleBuffer, from startTime: CMTime?) -> CMSampleBuffer? {
-        guard let startTime = startTime else { return sampleBuffer }
-        
-        var adjustedBuffer: CMSampleBuffer?
-        var timing = CMSampleTimingInfo()
-        var count: CMItemCount = 0
-        
-        // Get the timing info from the buffer - Fixed API usage with proper argument labels
-        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 
-                                                    entryCount: 1, 
-                                                    arrayToFill: &timing, 
-                                                    entriesNeededOut: &count) == noErr else {
-            return nil
-        }
-        
-        // Adjust time to be relative to the first frame
-        timing.presentationTimeStamp = CMTimeSubtract(timing.presentationTimeStamp, startTime)
-        
-        // Create a new buffer with the adjusted timing
-        var formatDescription: CMFormatDescription?
-        CMSampleBufferGetFormatDescription(sampleBuffer, &formatDescription)
-        
-        if let formatDescription = formatDescription,
-           let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Use labeled parameters as per the error message
-            _ = CMSampleBufferCreateReadyWithImageBuffer(
-                allocator: kCFAllocatorDefault, 
-                imageBuffer: imageBuffer,
-                formatDescription: formatDescription,
-                sampleTiming: &timing,
-                sampleBufferOut: &adjustedBuffer
-            )
-        }
-        
-        return adjustedBuffer
     }
 }
 
