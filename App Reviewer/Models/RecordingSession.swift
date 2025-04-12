@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct RecordingSession: Identifiable {
+struct RecordingSession: Identifiable, Codable {
     let id: UUID
     let createdAt: Date
     var name: String
@@ -34,7 +34,7 @@ struct RecordingSession: Identifiable {
     }()
 }
 
-struct Screenshot: Identifiable {
+struct Screenshot: Identifiable, Codable {
     let id: UUID = UUID()
     let timestamp: TimeInterval
     let imageURL: URL
@@ -47,7 +47,7 @@ struct Screenshot: Identifiable {
     }
 }
 
-struct Transcription: Identifiable {
+struct Transcription: Identifiable, Codable {
     let id: UUID = UUID()
     let startTime: TimeInterval
     let endTime: TimeInterval

@@ -123,9 +123,3 @@ class SessionManager: ObservableObject {
         return sessionsDirectoryURL.appendingPathComponent(session.id.uuidString, isDirectory: true)
     }
 }
-
-// MARK: - Extensions to make RecordingSession Codable
-
-extension RecordingSession: Codable {}
-extension Screenshot: Codable {}
-extension Transcription: Codable {}
