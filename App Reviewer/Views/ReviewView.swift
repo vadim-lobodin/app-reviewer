@@ -209,7 +209,9 @@ struct EmptyReviewView: View {
             Text("No review data available")
                 .font(.title2)
             
-            if let videoURL = session.videoURL, let audioURL = session.audioURL {
+            // Fix: Check if videoURL and audioURL exist without using optional binding
+            // Since one of them might not be an optional type
+            if session.videoURL != nil && session.audioURL != nil {
                 Button("Generate Analysis") {
                     isAnalyzing = true
                 }
