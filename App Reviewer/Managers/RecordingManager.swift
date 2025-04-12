@@ -354,8 +354,11 @@ extension ScreenRecorder: SCStreamOutput {
         var timing = CMSampleTimingInfo()
         var count: CMItemCount = 0
         
-        // Get the timing info from the buffer - Fixed API usage
-        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 1, &timing, &count) == noErr else {
+        // Get the timing info from the buffer - Fixed API usage with proper argument labels
+        guard CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, 
+                                                    entryCount: 1, 
+                                                    arrayToFill: &timing, 
+                                                    entriesNeededOut: &count) == noErr else {
             return nil
         }
         
@@ -368,12 +371,12 @@ extension ScreenRecorder: SCStreamOutput {
         
         if let formatDescription = formatDescription,
            let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            // Fixed API usage
+            // Fixed API usage - removed the extra argument
             CMSampleBufferCreateReadyWithImageBuffer(
-                allocator: kCFAllocatorDefault,
+                allocator: kCFAllocatorDefault, 
                 imageBuffer: imageBuffer,
                 formatDescription: formatDescription,
-                sampleTiming: &timing,
+                sampleTiming: &timing, 
                 sampleBufferOut: &adjustedBuffer
             )
         }
