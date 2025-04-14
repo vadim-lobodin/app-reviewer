@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import UniformTypeIdentifiers  // Added import for UTType
 
 class ExportService {
     enum ExportFormat {

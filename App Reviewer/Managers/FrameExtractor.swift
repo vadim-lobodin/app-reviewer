@@ -1,19 +1,14 @@
 import Foundation
 import AVFoundation
 import CoreImage
-import CoreGraphics
+import UniformTypeIdentifiers
 
 class FrameExtractor {
-    enum FrameExtractionError: Error {
-        case invalidVideoFile
-        case extractionFailed(String)
-    }
-    
     private let videoURL: URL
     private let interval: TimeInterval
     private let outputDirectory: URL
     
-    init(videoURL: URL, interval: TimeInterval = 5.0, outputDirectory: URL) {
+    init(videoURL: URL, interval: TimeInterval, outputDirectory: URL) {
         self.videoURL = videoURL
         self.interval = interval
         self.outputDirectory = outputDirectory
@@ -29,100 +24,91 @@ class FrameExtractor {
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
         
-        // Create array of times to sample
-        var times: [CMTime] = []
-        var currentTime: TimeInterval = 0
-        
-        while currentTime < durationSeconds {
-            times.append(CMTime(seconds: currentTime, preferredTimescale: 600))
-            currentTime += interval
-        }
-        
-        // Ensure we capture the last frame
-        if durationSeconds > 0 && (durationSeconds - currentTime).magnitude > 0.1 {
-            times.append(CMTime(seconds: durationSeconds, preferredTimescale: 600))
-        }
-        
-        // Create directory if needed
-        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-        
-        // Extract images
         var screenshots: [Screenshot] = []
         
-        for (index, time) in times.enumerated() {
+        // Extract frames at regular intervals
+        var time: TimeInterval = 0
+        while time < durationSeconds {
+            let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+            
             do {
-                let imageRef = try generator.copyCGImage(at: time, actualTime: nil)
-                let timeValue = CMTimeGetSeconds(time)
+                let imageRef = try await generator.image(at: cmTime)
+                // Remove unused variable - using underscore instead
+                _ = CIImage(cgImage: imageRef.image)
                 
-                // Save full-size image
-                let imageName = "screenshot_\(index)_\(Int(timeValue)).png"
-                let imageURL = outputDirectory.appendingPathComponent(imageName)
+                // Save full resolution image
+                let imageURL = outputDirectory.appendingPathComponent("frame_\(Int(time)).png")
                 
-                if let destination = CGImageDestinationCreateWithURL(imageURL as CFURL, kUTTypePNG, 1, nil) {
-                    CGImageDestinationAddImage(destination, imageRef, nil)
-                    if CGImageDestinationFinalize(destination) {
-                        // Create thumbnail
-                        let thumbnailURL = try createThumbnail(from: imageRef, index: index, time: timeValue)
-                        
-                        let screenshot = Screenshot(
-                            timestamp: timeValue,
-                            imageURL: imageURL,
-                            thumbnailURL: thumbnailURL
-                        )
-                        
-                        screenshots.append(screenshot)
-                    }
+                try saveCGImage(imageRef.image, to: imageURL)
+                
+                // Create and save thumbnail
+                let thumbnailURL = outputDirectory.appendingPathComponent("thumb_\(Int(time)).png")
+                if let thumbnail = createThumbnail(from: imageRef.image, maxSize: 320) {
+                    try saveCGImage(thumbnail, to: thumbnailURL)
+                    
+                    // Create screenshot object
+                    let screenshot = Screenshot(
+                        timestamp: time,
+                        imageURL: imageURL,
+                        thumbnailURL: thumbnailURL
+                    )
+                    screenshots.append(screenshot)
                 }
             } catch {
-                print("Warning: Failed to extract frame at \(time): \(error)")
+                print("Failed to generate image at time \(time): \(error)")
             }
-        }
-        
-        if screenshots.isEmpty {
-            throw FrameExtractionError.extractionFailed("No frames could be extracted")
+            
+            // Move to next interval
+            time += interval
         }
         
         return screenshots
     }
     
-    private func createThumbnail(from image: CGImage, index: Int, time: TimeInterval) throws -> URL {
-        // Create a smaller thumbnail image
-        let thumbnailSize = CGSize(width: 320, height: 180)
-        let thumbnailContext = CGContext(
+    private func saveCGImage(_ image: CGImage, to url: URL) throws {
+        let ciImage = CIImage(cgImage: image)
+        let context = CIContext()
+        
+        // In macOS 12 and later, use UTType.png
+        if #available(macOS 12.0, *) {
+            try context.writeJPEGRepresentation(of: ciImage, to: url, colorSpace: ciImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(), options: [:])
+        } else {
+            // Fallback for older macOS versions
+            try context.writeJPEGRepresentation(of: ciImage, to: url, colorSpace: ciImage.colorSpace ?? CGColorSpaceCreateDeviceRGB())
+        }
+    }
+    
+    private func createThumbnail(from image: CGImage, maxSize: CGFloat) -> CGImage? {
+        let originalWidth = CGFloat(image.width)
+        let originalHeight = CGFloat(image.height)
+        
+        // Calculate new size while maintaining aspect ratio
+        let aspectRatio = originalWidth / originalHeight
+        
+        let newWidth: CGFloat
+        let newHeight: CGFloat
+        
+        if originalWidth > originalHeight {
+            newWidth = min(maxSize, originalWidth)
+            newHeight = newWidth / aspectRatio
+        } else {
+            newHeight = min(maxSize, originalHeight)
+            newWidth = newHeight * aspectRatio
+        }
+        
+        let context = CGContext(
             data: nil,
-            width: Int(thumbnailSize.width),
-            height: Int(thumbnailSize.height),
-            bitsPerComponent: 8,
+            width: Int(newWidth),
+            height: Int(newHeight),
+            bitsPerComponent: image.bitsPerComponent,
             bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+            space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: image.bitmapInfo.rawValue
         )
         
-        guard let thumbnailContext = thumbnailContext else {
-            throw FrameExtractionError.extractionFailed("Failed to create thumbnail context")
-        }
+        context?.interpolationQuality = .high
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
         
-        thumbnailContext.interpolationQuality = .high
-        thumbnailContext.draw(image, in: CGRect(origin: .zero, size: thumbnailSize))
-        
-        guard let thumbnailImage = thumbnailContext.makeImage() else {
-            throw FrameExtractionError.extractionFailed("Failed to create thumbnail image")
-        }
-        
-        // Save thumbnail
-        let thumbnailName = "thumbnail_\(index)_\(Int(time)).png"
-        let thumbnailURL = outputDirectory.appendingPathComponent(thumbnailName)
-        
-        guard let destination = CGImageDestinationCreateWithURL(thumbnailURL as CFURL, kUTTypePNG, 1, nil) else {
-            throw FrameExtractionError.extractionFailed("Failed to create thumbnail destination")
-        }
-        
-        CGImageDestinationAddImage(destination, thumbnailImage, nil)
-        
-        guard CGImageDestinationFinalize(destination) else {
-            throw FrameExtractionError.extractionFailed("Failed to write thumbnail")
-        }
-        
-        return thumbnailURL
+        return context?.makeImage()
     }
 }

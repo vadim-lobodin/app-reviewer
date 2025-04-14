@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-@main
+// Removed @main attribute
 struct App_ReviewerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([

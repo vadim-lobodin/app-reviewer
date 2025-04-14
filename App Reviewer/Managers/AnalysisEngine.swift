@@ -66,15 +66,19 @@ class AnalysisEngine: ObservableObject {
             // Generate summaries
             let transcriptionsWithSummaries = transcriptionService.generateSummaries(for: transcriptions)
             
-            // Update session with results
-            var updatedSession = session
-            updatedSession.screenshots = screenshots
-            updatedSession.transcriptions = transcriptionsWithSummaries
+            // Fixed Swift 6 concurrency warnings by passing values directly instead of capturing mutable variable
+            let finalScreenshots = screenshots
+            let finalTranscriptions = transcriptionsWithSummaries
             
             // Save updated session
             await MainActor.run {
-                self.session = updatedSession
-                self.sessionManager.updateSession(updatedSession)
+                // Create and update the session within the MainActor context
+                var localSession = self.session
+                localSession.screenshots = finalScreenshots
+                localSession.transcriptions = finalTranscriptions
+                
+                self.session = localSession
+                self.sessionManager.updateSession(localSession)
                 self.progress = 1.0
                 self.state = .complete
             }

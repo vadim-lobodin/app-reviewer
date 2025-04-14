@@ -17,7 +17,7 @@ struct RecordingView: View {
         .padding()
         .onAppear {
             Task {
-                await recordingManager.refreshAvailableCaptureDevices()
+                await recordingManager.refreshMainDisplay()
             }
             
             // Configure callback for when recording session completes
@@ -52,30 +52,12 @@ struct RecordingView: View {
                 .fontWeight(.bold)
             
             VStack(alignment: .leading, spacing: 15) {
-                Text("Select what to record:")
+                Text("Ready to capture your screen")
                     .font(.headline)
                 
-                Picker("Capture Type", selection: $recordingManager.selectedDisplay) {
-                    Text("Select display...").tag(nil as SCDisplay?)
-                    
-                    ForEach(recordingManager.availableDisplays, id: \.displayID) { display in
-                        Text("Display: \(display.width) × \(display.height)")
-                            .tag(Optional(display))
-                    }
-                }
-                .frame(width: 400)
-                
-                Picker("Window", selection: $recordingManager.selectedWindow) {
-                    Text("Select window...").tag(nil as SCWindow?)
-                    
-                    ForEach(recordingManager.availableWindows, id: \.windowID) { window in
-                        if let appName = window.owningApplication?.applicationName {
-                            Text("Window: \(appName) - \(window.title)")
-                                .tag(Optional(window))
-                        }
-                    }
-                }
-                .frame(width: 400)
+                Text("The entire screen will be recorded.")
+                    .foregroundColor(.secondary)
+                    .padding(.bottom)
                 
                 Toggle("Record audio commentary", isOn: $recordingManager.isAudioEnabled)
                     .padding(.top, 10)
@@ -85,8 +67,12 @@ struct RecordingView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.windowBackgroundColor))
             )
+            .frame(width: 400)
             
             Button {
+                // Create a new session before starting recording
+                sessionManager.createNewSession()
+                
                 Task { await recordingManager.startRecording() }
             } label: {
                 Text("Start Recording")
@@ -97,7 +83,6 @@ struct RecordingView: View {
                     .background(Color.blue)
                     .cornerRadius(10)
             }
-            .disabled(recordingManager.selectedDisplay == nil && recordingManager.selectedWindow == nil)
         }
     }
     
@@ -175,6 +160,21 @@ struct RecordingView: View {
     }
 }
 
+// Make AnalysisState conform to Equatable
+extension AnalysisEngine.AnalysisState: Equatable {
+    static func == (lhs: AnalysisEngine.AnalysisState, rhs: AnalysisEngine.AnalysisState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.analyzing, .analyzing), (.complete, .complete):
+            return true
+        case (.error(let lhsMessage), .error(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        default:
+            return false
+        }
+    }
+}
+
+// Move AnalysisView to its own file to simplify the RecordingView file
 struct AnalysisView: View {
     @EnvironmentObject private var sessionManager: SessionManager
     @StateObject private var analysisEngine: AnalysisEngine
@@ -190,50 +190,58 @@ struct AnalysisView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            if analysisEngine.state == .analyzing {
-                ProgressView("Analyzing content...", value: analysisEngine.progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle())
-                    .frame(width: 300)
+            // Simplified state handling
+            Group {
+                switch analysisEngine.state {
+                case .analyzing:
+                    ProgressView("Analyzing content...", value: analysisEngine.progress, total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(width: 300)
+                    
+                    // Fix: Force unwrap avoided with string interpolation
+                    Text("\(Int(analysisEngine.progress * 100))%")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
                 
-                Text("\(Int(analysisEngine.progress * 100))%")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-            } else if analysisEngine.state == .complete {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.green)
-                
-                Text("Analysis Complete!")
-                    .font(.headline)
-                
-                Button("View Results") {
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-            } else if case .error(let message) = analysisEngine.state {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(.red)
-                
-                Text("Analysis Failed")
-                    .font(.headline)
-                
-                Text(message)
-                    .foregroundColor(.secondary)
-                
-                Button("Try Again") {
-                    Task {
-                        await analysisEngine.analyzeSession()
+                case .complete:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.green)
+                    
+                    Text("Analysis Complete!")
+                        .font(.headline)
+                    
+                    Button("View Results") {
+                        dismiss()
                     }
-                }
-                .buttonStyle(.bordered)
-            } else {
-                Button("Start Analysis") {
-                    Task {
-                        await analysisEngine.analyzeSession()
+                    .buttonStyle(.borderedProminent)
+                
+                case .error(let message):
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.red)
+                    
+                    Text("Analysis Failed")
+                        .font(.headline)
+                    
+                    Text(message)
+                        .foregroundColor(.secondary)
+                    
+                    Button("Try Again") {
+                        Task {
+                            await analysisEngine.analyzeSession()
+                        }
                     }
+                    .buttonStyle(.bordered)
+                
+                case .idle:
+                    Button("Start Analysis") {
+                        Task {
+                            await analysisEngine.analyzeSession()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .padding(40)

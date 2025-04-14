@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct RecordingSession: Identifiable {
+struct RecordingSession: Identifiable, Codable {
     let id: UUID
     let createdAt: Date
     var name: String
@@ -34,11 +34,20 @@ struct RecordingSession: Identifiable {
     }()
 }
 
-struct Screenshot: Identifiable {
-    let id: UUID = UUID()
+struct Screenshot: Identifiable, Codable {
+    // Changed to vars to allow Codable to decode them
+    var id: UUID
     let timestamp: TimeInterval
     let imageURL: URL
     let thumbnailURL: URL?
+    
+    // Initialize with default value
+    init(id: UUID = UUID(), timestamp: TimeInterval, imageURL: URL, thumbnailURL: URL?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.imageURL = imageURL
+        self.thumbnailURL = thumbnailURL
+    }
     
     var formattedTimestamp: String {
         let minutes = Int(timestamp) / 60
@@ -47,12 +56,22 @@ struct Screenshot: Identifiable {
     }
 }
 
-struct Transcription: Identifiable {
-    let id: UUID = UUID()
+struct Transcription: Identifiable, Codable {
+    // Changed to vars to allow Codable to decode them
+    var id: UUID
     let startTime: TimeInterval
     let endTime: TimeInterval
     let text: String
     var summary: String?
+    
+    // Initialize with default value
+    init(id: UUID = UUID(), startTime: TimeInterval, endTime: TimeInterval, text: String, summary: String? = nil) {
+        self.id = id
+        self.startTime = startTime
+        self.endTime = endTime
+        self.text = text
+        self.summary = summary
+    }
     
     var formattedTimeRange: String {
         let startMinutes = Int(startTime) / 60
